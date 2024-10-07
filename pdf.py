@@ -8,7 +8,7 @@ import subprocess
 from subprocess import PIPE
 import datetime
 import sys
-
+import shutil
 import fitz  # pip install pymupdf
 
 
@@ -20,6 +20,14 @@ class Section:
         self.reviews = reviews
         self.last_review = reviews[-1] if len(reviews) > 1 else None
 
+def find_pdf_viewer():
+    pdf_viewers = ['mupdf', 'vivaldi']
+
+    for viewer in pdf_viewers:
+        if shutil.which(viewer):
+            return viewer
+
+    raise FileNotFoundError("No supported PDF viewer found.")
 
 def compute_file_hash(file_path, algorithm='sha256'):
     """Compute the hash of a file using the specified algorithm."""
@@ -32,28 +40,30 @@ def compute_file_hash(file_path, algorithm='sha256'):
 
     return hash_func.hexdigest()
 
+def open_pdf_at_page(page: int):
+    viewer = find_pdf_viewer()
 
-def open_mupdf_at_page(page: int):
-    process = subprocess.Popen(
-        ['mupdf', sys.argv[1], '&'], stdin=PIPE, text=True)
-    window_id = None
-    while not window_id:
-        try:
-            # Use xdotool to search for the MuPDF window (by class name 'mupdf')
-            window_id = subprocess.check_output(
-                ["xdotool", "search", "--onlyvisible", "--class", "mupdf"]).strip()
-        except subprocess.CalledProcessError:
-            # If no window is found, keep waiting
-            time.sleep(0.1)
-    # Type the page number
-    subprocess.run(["xdotool", "type", "--window",
-                   window_id, str(page)])
-    # Press Enter to go to the page
-    subprocess.run(["xdotool", "key", "--window", window_id, "g"])
-    # Press Enter to go to the page
-    subprocess.run(["xdotool", "key", "--window", window_id, "Return"])
+    if viewer == 'mupdf':
+        process = subprocess.Popen(
+            ['mupdf', sys.argv[1]], stdin=PIPE, text=True)
+        window_id = None
+        
+        while not window_id:
+            try:
+                window_id = subprocess.check_output(
+                    ["xdotool", "search", "--onlyvisible", "--class", "mupdf"]).strip()
+            except subprocess.CalledProcessError:
+                time.sleep(0.1)
+        
+        subprocess.run(["xdotool", "type", "--window", window_id, str(page)])
+        subprocess.run(["xdotool", "key", "--window", window_id, "g"])
+        subprocess.run(["xdotool", "key", "--window", window_id, "Return"])
+
+    elif viewer == 'vivaldi':
+        process = subprocess.run(['vivaldi', f'file://{sys.argv[1]}#page={page}'], check=True)
+
+    
     return process
-
 
 def get_bookmarks(filepath: str) -> Dict[int, str]:
     # WARNING! One page can have multiple bookmarks!
@@ -85,7 +95,7 @@ for sec in secs:
     print(sec.idx, sec.name, sec.page, sec.reviews)
 current_review_section = 1
 desired_section = int(input("Which section would you like to review?"))
-process = open_mupdf_at_page(secs[desired_section].page)
+process = open_pdf_at_page(secs[desired_section].page)
 
 user_input = input("Are you satisfied with your review session?")
 if user_input == 'y':
