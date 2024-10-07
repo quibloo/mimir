@@ -41,8 +41,6 @@ def compute_file_hash(file_path, algorithm='sha256'):
     return hash_func.hexdigest()
 
 def open_pdf_at_page(page: int):
-    viewer = find_pdf_viewer()
-
     if viewer == 'mupdf':
         process = subprocess.Popen(
             ['mupdf', sys.argv[1]], stdin=PIPE, text=True)
@@ -74,6 +72,7 @@ def get_bookmarks(filepath: str) -> Dict[int, str]:
             bookmarks[page] = title
     return bookmarks
 
+viewer = find_pdf_viewer()
 
 # hash file and check to see if there is already a hashed folder
 hash = compute_file_hash(sys.argv[1])
@@ -102,7 +101,9 @@ if user_input == 'y':
     secs[desired_section].reviews.append(datetime.datetime.today())
     with open(f"{hash}.pkl", 'wb') as file:
         pickle.dump(secs, file)
-    process.terminate()
+    if viewer == 'mupdf':
+        process.terminate()
 else:
     print("Sorry you feel that way, we won't be adding today's review to your history...")
-    process.terminate()
+    if viewer == 'mupdf':
+        process.terminate()
